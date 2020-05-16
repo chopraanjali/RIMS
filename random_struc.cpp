@@ -14,12 +14,11 @@
 TODO :
  1. Read 2 files 
  2. Create new array for second file molecules
- 3. Remove unnecessary arrays elements and all_elements , coords_atoms, coords_atoms_rot, etc
+ done 3. Remove unnecessary arrays elements and all_elements , coords_atoms, coords_atoms_rot, etc
  4. Write function to check distance between each atom of another molecule (except for its own atoms)
  5. Write function to determine larger molecule from input files
  6. Generate system for larger molecules first with much larger minimum distance (10% of given distance)
  7. Generate system for smaller molecules with given minimum distance requirement
- 
  
 */
 //  cd /mnt/c/Users/Anjali/Dropbox/Thesis/intial_structure
@@ -46,16 +45,17 @@ struct params
 {
   float                 density;
   float                 box_dim;
+  double                r_box_dim;
+  double                min_dist;
   string                inp_file_1;
   string                inp_file_2;
   string                out_file;
-  int                   com_id;
   unsigned long int     seed;
+  int                   com_id;
   int                   args;
-  double                min_dist;
   int                   tot_molec;
-  double                r_box_dim;
-};
+  int                   dimensions;
+ };
 
 params getAndPrintRunParameters(int argc, char *argv[])
 {
@@ -69,12 +69,12 @@ params getAndPrintRunParameters(int argc, char *argv[])
   p.com_id      =   atoi(argv[6]);
   p.seed        =   atoi(argv[7]);
   p.args        =   argc;
-  p.min_dist    =  6.0;             //twice the largest distance from com (approx)
-
-  f         =  p.density * p.box_dim*p.box_dim*p.box_dim;
+  p.min_dist    =   6.0;             //twice the largest distance from com (approx)
+  p.dimensions  =   3;
+  f             =  p.density * p.box_dim*p.box_dim*p.box_dim;
 
   p.tot_molec   = (int)(f+0.5);    //cast to int for proper rounding and conversion
-  p.r_box_dim  = 1.0/p.box_dim;
+  p.r_box_dim   = 1.0/p.box_dim;
 
 
 
@@ -99,6 +99,13 @@ params getAndPrintRunParameters(int argc, char *argv[])
   return p;
 }
 
+struct molecule 
+{
+  int num_of_atoms;
+  string elems[];
+  double xyz_co[][];
+};
+
 
 void printHelp()
 {
@@ -113,14 +120,14 @@ void printHelp()
 void readMoleculeXyzFile(int atoms, string line, double **&coords_atoms, string *&elements)
 {
     //Reading single molecule file
-    istringstream   iss;
+    istringstream   iss1, iss2;
     int             tot_atoms;
 
     getline(inFile1, line); 		//gets comment line
 
     for (int i = 0; i < atoms; i++) 	//assigns coordinates from file to array
     {
-      iss.clear();
+      iss1.clear();
       getline(inFile1,line);
 
       if(line.length() == 0)        	//empty line error
@@ -129,11 +136,11 @@ void readMoleculeXyzFile(int atoms, string line, double **&coords_atoms, string 
         exit(3);
       }
 
-      iss.str(line);
-      iss >> elements[i];
-      iss >> coords_atoms[i][0];
-      iss >> coords_atoms[i][1];
-      iss >> coords_atoms[i][2];
+      iss1.str(line);
+      iss1 >> elements[i];
+      iss1 >> coords_atoms[i][0];
+      iss1 >> coords_atoms[i][1];
+      iss1 >> coords_atoms[i][2];
 
       cout << elements[i] << "|" << coords_atoms[i][0] << "|" << coords_atoms[i][1] << "|" << coords_atoms[i][2] << endl;
     }
@@ -142,30 +149,29 @@ void readMoleculeXyzFile(int atoms, string line, double **&coords_atoms, string 
 }
 
 
-void allocateMemory(struct params &s, string *&all_elements, string *&elements, double **&coords_atoms_rot, double **&coords_atoms, double **&coords_com, double **&angles_com, int tot_atoms, int atoms)
+void allocateMemory(struct params &s, string *&elements, double **&coords_atoms_rot, double **&coords_atoms, double **&coords_com, double **&angles_com, int tot_atoms, int atoms)
 {
     // MEMORY ALLOCATION
   coords_com = new(nothrow) double*[s.tot_molec];         //xyz coordinates
   angles_com = new(nothrow) double*[s.tot_molec];         //angles
               for (int i = 0; i < s.tot_molec; i++)
               {
-                coords_com[i] = new double[3];
-				angles_com[i] = new double[3];
+                coords_com[i] = new double[s.dimensions];
+				        angles_com[i] = new double[s.dimensions];
               }
 
-  elements = new(nothrow) string[atoms];                        //elements from single molecule file
-  all_elements= new(nothrow) string[tot_atoms];                //elements to write in .xyz
+  elements = new(nothrow) string[tot_atoms];                        //elements from single molecule file
 
   coords_atoms = new(nothrow) double*[atoms];
               for (int i = 0; i < atoms ; i++)
               {
-                coords_atoms[i] = new double[3];               //coordinates from input file
+                coords_atoms[i] = new double[s.dimensions];               //coordinates from input file
               }
 
   coords_atoms_rot = new(nothrow) double*[tot_atoms];
               for (int i = 0; i < tot_atoms; i++)                  //array for rotated atoms (FINAL)
               {
-                coords_atoms_rot[i] = new double[3];
+                coords_atoms_rot[i] = new double[s.dimensions];
               }
 	cout << "Memory allocated!" << endl;  
   }
@@ -278,16 +284,16 @@ void makePeriodic(double **&coords_atoms_rot, int curr_atoms, double length, int
 	}
 }
 
-
-void rotateMoleculeAboutCOM(struct params &s, double **&coords_atoms, int atoms, double **&coords_atoms_rot, string *&all_elements, string *&elements, double **&coords_com, double **&angles_com)  //function to rotate molecule about chosen COM
+//function to rotate molecule about chosen COM
+void rotateMoleculeAboutCOM(struct params &s, double **&coords_atoms, int atoms, double **&coords_atoms_rot, string *&elements, double **&coords_com, double **&angles_com)  
 {
     cout << "Inside the rotation function!" << endl;
     cout << "Printing function arguments " << endl;
     cout << "atoms  = " << atoms << endl;
     cout << "chosen com is " << s.com_id << endl;
     //dummy stores coordinates of chosen com from single molecule file
-    double dummy[3]{};
-    for (int i = 0; i < 3 ; i++)
+    double dummy[s.dimensions]{};
+    for (int i = 0; i < s.dimensions ; i++)
       {
         cout << "dums " << dummy[i] << endl;
         dummy[i] = coords_atoms[s.com_id-3][i];
@@ -296,7 +302,7 @@ void rotateMoleculeAboutCOM(struct params &s, double **&coords_atoms, int atoms,
 
     for (int i = 0; i < atoms; i++)     //translates molecule to origin based on user's chosen com_id
     {
-      for (int j = 0; j < 3; j++)
+      for (int j = 0; j < s.dimensions; j++)
       {
       coords_atoms[i][j] = coords_atoms[i][j] - dummy[j];
       }
@@ -304,8 +310,7 @@ void rotateMoleculeAboutCOM(struct params &s, double **&coords_atoms, int atoms,
 
     int k = 0;                  //number of molecules
     int curr_atoms = 0;         //counter for total atoms
-    double coords_atoms_temp[atoms][3]{};          // temp array
-  //  double angles_com[s.tot_molec][3]{};
+    double coords_atoms_temp[atoms][s.dimensions]{};          // temp array
     double sin_a[s.tot_molec];  double sin_b[s.tot_molec];  double sin_g[s.tot_molec];
     double cos_a[s.tot_molec];  double cos_b[s.tot_molec];  double cos_g[s.tot_molec];
 
@@ -338,7 +343,7 @@ void rotateMoleculeAboutCOM(struct params &s, double **&coords_atoms, int atoms,
                                       (coords_atoms[j][2] ) * cos_b[k]  * cos_g[k]  ;
 
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < s.dimensions; i++)
         {
           //take rotated atoms and move them to generated com locations
           coords_atoms_rot[curr_atoms][i] = coords_com[k][i] + coords_atoms_temp[j][i];
@@ -348,35 +353,35 @@ void rotateMoleculeAboutCOM(struct params &s, double **&coords_atoms, int atoms,
         }
 
         //repeat elements after every loop for each molecule
-        all_elements[curr_atoms] = elements[j];
+        elements[curr_atoms] = elements[j];
         curr_atoms++;
       }
-        cout << "total molecules are : " << k << endl;
+      cout << "total molecules are : " << k+1 << endl;
       k++;
     }
 
 }
 
-void writeOutputXyzFile(struct params &s, string *&all_elements, double **&coords_atoms_rot, int tot_atoms) //writing to .xyz file
+//writing to .xyz file
+void writeOutputXyzFile(struct params &s, string *&elements, double **&coords_atoms_rot, int tot_atoms)
 {
   outFile.open(s.out_file.c_str());
   outFile << tot_atoms << endl;
   outFile << "!comment line" << endl;
   for (int i = 0; i < tot_atoms ; i++)
   {
-    outFile << all_elements[i] << "\t" << coords_atoms_rot[i][0] << "\t" << coords_atoms_rot[i][1] << "\t" << coords_atoms_rot[i][2] << endl;
+    outFile << elements[i] << "\t" << coords_atoms_rot[i][0] << "\t" << coords_atoms_rot[i][1] << "\t" << coords_atoms_rot[i][2] << endl;
   }
   cout << "output file written!" << endl;
   outFile.close();
 }
 
 
-void deallocateMemory(struct params &s, string *&all_elements, string *&elements, double **&coords_atoms_rot, double **&coords_atoms, double **&coords_com, double **&angles_com, int tot_atoms, int atoms)
+void deallocateMemory(struct params &s, string *&elements, double **&coords_atoms_rot, double **&coords_atoms, double **&coords_com, double **&angles_com, int tot_atoms, int atoms)
 {
   //DEALLOCATE MEMORY
 
   delete [] elements;
-  delete [] all_elements;
 
   for (int i = 0; i < tot_atoms; i++)                  //array for rotated atoms (FINAL)
   {
@@ -428,98 +433,28 @@ int main (int argc, char *argv[])
   cout << "Total atoms = " << tot_atoms << " Atoms = " << atoms << endl;
     
   // MEMORY ALLOCATION
+  string      *elements;
 	double      **coords_com;
 	double      **angles_com;
-	string      *elements;
-	string      *all_elements;
 	double      **coords_atoms;
 	double      **coords_atoms_rot;
 
-	allocateMemory(s,all_elements,elements,coords_atoms_rot,coords_atoms,coords_com,angles_com,tot_atoms,atoms);
+	allocateMemory(s,elements,coords_atoms_rot,coords_atoms,coords_com,angles_com,tot_atoms,atoms);
 	readMoleculeXyzFile(atoms, line, coords_atoms, elements);
 
 	cout << "Creating " << s.tot_molec << " molecules in a simulation box of side " << s.box_dim << " units!"<< endl;
 	generateSystem(s,coords_com,angles_com);
-/*
-  //RNG generator : generates uniformly distributed floating point number in given range
-    //  http://www.cplusplus.com/reference/random/uniform_real_distribution/
-	//random_device device;           //for random seed generation
 
-
-    bool      generation_successful;
-    cout << "Initializing random number generator with seed " << s.seed << endl;
-
-    mt19937 generator(s.seed);
-    uniform_real_distribution<double> distribution(0.0, 1.0);
-
-    cout << "PRNG initiated!" << endl;
-
-   // asssign random coordinates to molecule 1
-  coords_com[0][0] = distribution(generator) * s.box_dim ;
-  coords_com[0][1] = distribution(generator) * s.box_dim ;
-  coords_com[0][2] = distribution(generator) * s.box_dim ;
-
-  cout << "coords 0: " <<coords_com[0][0] << "|" << coords_com[0][1] << "|" << coords_com[0][2] << endl;
-
-  angles_com[0][0] = (distribution(generator)  * 2 * pi);
-  angles_com[0][1] = (distribution(generator)  * 2 * pi);
-  angles_com[0][2] = (distribution(generator)  * 2 * pi);
-
-  cout << "angles 0: " << angles_com[0][0] << "|" << angles_com[0][1] << "|" << angles_com[0][2] << endl;
-
-
-  int i = 1;
-  while (i < s.tot_molec)
-  {
-    cout <<  "total_molecules are " << i << endl;
-    generation_successful = true;
-
-    // assign random coordinates to all molec-1
-    coords_com[i][0] = distribution(generator) * s.box_dim ;
-    coords_com[i][1] = distribution(generator) * s.box_dim ;
-    coords_com[i][2] = distribution(generator) * s.box_dim ;
-
-    cout << "coords " << i << ": " <<coords_com[i][0] << "|" << coords_com[i][1] << "|" << coords_com[i][2] << endl;
-
-    // assign random angles to all molec-1
-    angles_com[i][0] = (distribution(generator)  * 2 * pi);
-    angles_com[i][1] = (distribution(generator)  * 2 * pi);
-    angles_com[i][2] = (distribution(generator)  * 2 * pi);
-
-    cout << "angles  " << i << ": " << angles_com[i][0] << "|" << angles_com[i][1] << "|" << angles_com[i][2] << endl;
-
-
-    //checking distance for all coms created and storing coordinates only when the distance is greater than minimum distance
-    for (int j = 0; j < i; j++ )
-    {
-        double DIST;
-
-        DIST = Dist_check(i, j, coords_com, s.r_box_dim, s.box_dim);
-
-        if (DIST < s.min_dist)                           //sets generation_successful as false
-        {
-            generation_successful = false;
-        }
-    }
-
-    if (generation_successful == true)               //increment molecule number (i)
-        {
-            i++;
-        }
-  }
-*/
 	//cout << "Attempting to rotate molecule. " << endl;
 	
-	rotateMoleculeAboutCOM(s, coords_atoms,atoms,coords_atoms_rot,all_elements,elements,coords_com,angles_com);
+	rotateMoleculeAboutCOM(s, coords_atoms,atoms,coords_atoms_rot,elements,coords_com,angles_com);
 	//cout << "Molecule rotated about com!" << endl;
 
-	writeOutputXyzFile(s,all_elements,coords_atoms_rot,tot_atoms);
+	writeOutputXyzFile(s,elements,coords_atoms_rot,tot_atoms);
 
 	cout << "Initial structure created with random coordinates and random orientation!" << endl;
-
-  //DEALLOCATE MEMORY
 	
-	deallocateMemory(s,all_elements,elements, coords_atoms_rot, coords_atoms, coords_com, angles_com,tot_atoms,atoms);
+	deallocateMemory(s,elements, coords_atoms_rot, coords_atoms, coords_com, angles_com,tot_atoms,atoms);
 	cout << "Memory deallocated!" << endl;
 	
 	return 0;
