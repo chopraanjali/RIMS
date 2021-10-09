@@ -1,0 +1,31 @@
+# File to read paramters for generating initial structure
+# This is a COMMENT
+# DONT CHANGE NAMES OF paramters
+# Read HELP below for information
+
+density                 = 0.0003
+percent_solute          = 35
+box_dim                 = 30.0
+min_dist                = 3.0
+out_file                = new.xyz
+seed                    = 56468
+dimensions              = 3
+inp_mols                = 1
+solute_filename         = CNT.xyz
+solvent_filename        = prop_gly.xyz
+
+
+#   *********************************       HELP     *******************************************
+#
+#   - density           :   Number density has units molecules/Angstrom^3
+#   - box_dim           :   Box length has units Angstrom
+#   - seed              :   Provide a seed for random number generator (0 to 4,294,967,295)
+#   - out_file          :   Name of output file with .xyz extension
+#   - percent_solute    :   Percentage of solute in mixture.
+#   - inp_mols          :   To create a pure system set inp_mols to 1
+#                           To create a binary system set inp_mols to 2
+#   - dimensions        :   dimesions of the created system (3d)
+#   - solute_filename   :   .xyz file for single molecule of solute (if present)
+#   - solvent_filename  :   .xyz file for single molecule of solvent
+#
+#   **********************************************************************************************
