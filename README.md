@@ -1,4 +1,4 @@
-# Initial-Structure
+# Randomised Initial Molecular System (RIMS) #
 
 To compile: g++ random_struc.cpp -o executable
 To run: ./executable
