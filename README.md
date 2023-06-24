@@ -24,3 +24,7 @@ Quick help is also printed in the params.txt file. Here is a slightly detailed d
 10. solvent_filename : Provide the generator with a solvent molecule in .xyz format
 
 #### random_struc.cpp #####
+Main code to generate the specified molecular system
+
+#### CNT.cpp ####
+Generates Carbon Nanotubes (CNT) for a given diameter and length
